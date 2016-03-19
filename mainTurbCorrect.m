@@ -2,9 +2,9 @@
 % Created by Nantheera Anantrasirichai,  The University of Bristol
 % 20/04/2012 n.anantrasirichai@bristol.ac.uk
 % Please cite
-% Anantrasirichai, N.; Achim, A.; Kingsbury, N.G.; Bull, D.R., "Atmospheric 
-% Turbulence Mitigation Using Complex Wavelet-Based Fusion," Image Processing, 
-% IEEE Transactions on , vol.22, no.6, pp.2398,2408, June 2013
+% Anantrasirichai, N.; Achim, A.; Kingsbury, N.G.; Bull, D.R., "Atmospheric
+% Turbulence Mitigation Using Complex Wavelet-Based Fusion," Image Processing,
+% IEEE Transactions on , vol.22, no.6, pp.2398-2408, June 2013
 
 clear all
 
@@ -18,38 +18,39 @@ dirnameroot = 'images\';
 
 dirname = dirnameroot;% [dirnameroot,'distortion',num2str(dist),'\'];
 extfile = 'tif';%'png';
-totalFrame = length(dir([dirnameroot,'*.',extfile]));
+startFrame = 1;
+totalFrame = 50; %length(dir([dirnameroot,'*.',extfile]));
 
 % -------------------------------------------------------------------------
 % control parameters
 % -------------------------------------------------------------------------
 resizeRatio = 0.5;
 fusionMethod = 'pixel';     % 'region', 'pixel'
-                            % 'pixel' is faster, 'region' is better
+                            % 'pixel' is faster, 'region' is better for noisy
 refFrameType = 'average';   % 'maxGradient', 'maxHP'
+doFrameSelection = false;   % true if i) speed up, ii) need stabilisation
 selectROI = false;          % true if ROI is significantly shifted between succesive frames
 sharpMethod = 'gradient';   %'gradient' or 'dtcwt'
-doPostprocess = false;      % true;
-doEnhance = true;           % false; 
+doPostprocess = false;      % true - sharpening and denoising;
+doEnhance = true;           % false;
 
 mseGain = 1;
 gradGain1 = 1;
 gradGain2 = 1;
 infoGain2 = 20;
 
-levels = 3;
+levels = 4;
 
 numFrameRegis = 50;
 maxFrameused = 25;
 clipLimit = 0.002;
-useBigAreaInfo = false;     %true;
+useBigAreaInfo = false;     % true;
 
 
 % -------------------------------------------------------------------------
 % load input sequence
 % -------------------------------------------------------------------------
-[input, inputU, inputV] = loadInput(dirname, extfile, totalFrame, resizeRatio);
-
+[input, inputU, inputV] = loadInput(dirname, extfile,startFrame, totalFrame, resizeRatio);
 % for k = 1:length(mov)
 %     img = mov.cdata;
 %     if size(img,3)==3
@@ -68,12 +69,16 @@ avgFrame = findRefFrame(input, refFrameType);
 % -------------------------------------------------------------------------
 % select good frames
 % -------------------------------------------------------------------------
-[height, width, totalFrame] = size(input);
-rangei = 1:height;
-rangej = 1:width;
-rangek = 1:totalFrame;
-[valcostSelect, indcostSelect] = findGoodFrame(avgFrame, input, rangei, rangej, rangek, totalFrame, sharpMethod, 0, ...
+if doFrameSelection
+    [height, width, totalFrame] = size(input);
+    rangei = 1:height;
+    rangej = 1:width;
+    rangek = 1:totalFrame;
+    [valcostSelect, indcostSelect] = findGoodFrame(avgFrame, input, rangei, rangej, rangek, totalFrame, sharpMethod, 0, ...
     mseGain, gradGain1, 0);
+else
+    indcostSelect = 1:totalFrame;
+end
 
 % -------------------------------------------------------------------------
 % select good frames from ROI
@@ -88,15 +93,17 @@ if selectROI
 else
     indcostSelectupdate = indcostSelect;
 end
-halfval = (mseGain+gradGain2)/2; % half of max costSelect
-[~,numFrametoUse] = min(abs(valcostSelect-halfval));
-numFrametoUse = min(numFrametoUse,maxFrameused);
+if doFrameSelection || selectROI
+    halfval = (mseGain+gradGain2)/2; % half of max costSelect
+    [~,numFrametoUse] = min(abs(valcostSelect-halfval));
+    numFrametoUse = min(numFrametoUse,maxFrameused);
 
-% reduce input to only good selected frames
-input = input(:,:,indcostSelectupdate(1:numFrametoUse));
-if ~isempty(inputU)
-    inputU = inputU(:,:,indcostSelectupdate(1:numFrametoUse));
-    inputV = inputV(:,:,indcostSelectupdate(1:numFrametoUse));
+    % reduce input to only good selected frames
+    input = input(:,:,indcostSelectupdate(1:numFrametoUse));
+    if ~isempty(inputU)
+        inputU = inputU(:,:,indcostSelectupdate(1:numFrametoUse));
+        inputV = inputV(:,:,indcostSelectupdate(1:numFrametoUse));
+    end
 end
 disp('Done frame selection')
 % -------------------------------------------------------------------------
